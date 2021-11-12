@@ -12,6 +12,11 @@
 #include <Arduino.h>
 #include <esp_now.h>
 #include <WiFi.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+
+const char* ssid = "Galaxy3";
+const char* password = "12345678910";
 
 #include "main.h"
 #include "battery.h"
@@ -54,6 +59,17 @@ RTC_DATA_ATTR uint8_t sync;
 unsigned long wakeUpTime = 0;
 unsigned long currentTime = 0;
 unsigned long timerDelay = 3000;
+
+//Your Domain name with URL path or IP address with path
+const char* serverName = "http://127.0.0.1:5000/postjson";
+
+// the following variables are unsigned longs because the time, measured in
+// milliseconds, will quickly become a bigger number than can be stored in an int.
+unsigned long lastTime = 0;
+// Timer set to 10 minutes (600000)
+//unsigned long timerDelay = 600000;
+// Set timer to 5 seconds (5000)
+unsigned long timeDelay = 5000;
 
 void setup() {
 	// Save the time firstly
@@ -234,6 +250,57 @@ void OnDataRecv(const uint8_t * mac_addr, const uint8_t *incomingData, int len)
 	printAllESPData();
 
 	// Store AllData to Cloud
+
+	// Init ESP-NOW
+	if (esp_now_deinit() != 0) {
+		Serial.println("\nError DeInitializing ESP-NOW");
+		return;
+	} 
+
+	// Set device as a Wi-Fi Station
+	WiFi.begin(ssid, password);
+	Serial.println("Connecting");
+	while(WiFi.status() != WL_CONNECTED) {
+	delay(500);
+	Serial.print(".");
+	}
+	Serial.println("");
+	Serial.print("Connected to WiFi network with IP Address: ");
+	Serial.println(WiFi.localIP());
+
+    //Check WiFi connection status
+	if(WiFi.status()== WL_CONNECTED){
+		DynamicJsonDocument doc(2048);
+		doc["board_ID"] = allData[BOARD_ID].board_ID;
+		doc["battery"] = allData[BOARD_ID].battery;
+		doc["temperature"] = allData[BOARD_ID].temperature;
+		doc["humidity"] = allData[BOARD_ID].humidity;
+		doc["pressure"] = allData[BOARD_ID].pressure;
+		doc["luminosity"] = allData[BOARD_ID].luminosity;
+		// Serialize JSON document
+		String json;
+		serializeJson(doc, json);
+		WiFiClient client;  // or WiFiClientSecure for HTTPS
+		HTTPClient http;
+		http.begin("https://micro-flight-331010.uc.r.appspot.com/postdata");  //Specify destination for HTTP request
+		http.addHeader("Content-Type", "application/json");             //Specify content-type header
+		int httpResponseCode = http.POST(json);
+		if (httpResponseCode > 0) { //Check for the returning code
+			String payload = http.getString();
+			Serial.println(httpResponseCode);
+			Serial.println(payload);
+			}
+		else {
+			Serial.println("Error on HTTP request");
+		}
+		// Disconnect
+		http.end();
+		// Disconnect
+		WiFi.disconnect();
+	}
+	else {
+		Serial.println("WiFi Disconnected");
+	}
 	
 }
 
