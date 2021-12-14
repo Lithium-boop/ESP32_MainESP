@@ -54,7 +54,7 @@
 #define 		ESP_ADDR				6					// ESP MAC Address size (6 Bytes)
 #define 		RESERVED				6					// Reserved Bytes for other sensors (6 Bytes)
 #define 		SLEEP_TIME				30					// Default Sleep Time (in Seconds)
-#define 		ACTIVITY_TIME			5					// Default Activity Time before going to Sleep Mode (in Seconds)
+#define 		ACTIVITY_TIME			20					// Default Activity Time before going to Sleep Mode (in Seconds)
 #define 		s_TO_uS_FACTOR 			1000000 			// Conversion Factor for Seconds to MicroSeconds
 #define 		ms_TO_uS_FACTOR 		1000	 			// Conversion Factor for MiliSeconds to MicroSeconds
 
@@ -110,6 +110,58 @@ const uint8_t broadcastAddresses[ESP_TOTAL][ESP_ADDR] = {
 
 
 // PROTOTYPES (IMPLEMENTED IN MAIN.CPP)
+
+
+/**
+ * @fn 					- getWiFiChannel
+ * 
+ * @brief 				- This function scans WiFi network and return its channel
+ * 
+ * @param[in] 			- ssid 
+ * 
+ * @return 				- WiFi channel 
+ */
+int32_t getWiFiChannel(const char *ssid);
+
+/**
+ * @fn 					- initWiFi
+ * 
+ * @brief 				- This function initializes WiFi network
+ * 
+ * @return 				- none 
+ */
+void initWiFi(void);
+
+/**
+ * @fn 					- initESP_NOW
+ * 
+ * @brief 				- This function initializes ESP_NOW network
+ * 
+ * @return 				- none 
+ */
+void initESP_NOW(void);
+
+
+/**
+ * @fn 					- configFirebase
+ * 
+ * @brief 				- This function configures Firebase Objects
+ * 
+ * @return 				- none 
+ */
+void configFirebase(void);
+
+
+/**
+ * @fn 					- initFirebase
+ * 
+ * @brief 				- This function initializes Firebase
+ * 
+ * @return 				- none 
+ */
+void initFirebase(void);
+
+
 
 /**
  * @fn					- OnDataSent 
@@ -200,5 +252,31 @@ ESP_Data getESPData(void);
  * @note				- To be called when new ESP_Command arrives through UART Interface
  */
 ESP_Command getESPCommand(void);
+
+
+/**
+ * @fn					- toggleLED 
+ * 
+ * @brief				- This function toogles LED every 200ms
+ * 
+ * @param[in] 			- Current time
+ * 
+ * @return				- none
+ * 
+ * @note				- none
+ */
+void toggleLED(unsigned long currentTime);
+
+
+/**
+ * @fn					- storeDataOnCloud
+ * 
+ * @brief 				- This function store All ESPData on Cloud
+ * 
+ * @return				- none
+ * 
+ */
+void storeDataOnCloud(void);
+
 
 #endif /* __MAIN_H */
