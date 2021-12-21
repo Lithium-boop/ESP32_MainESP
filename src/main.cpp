@@ -20,8 +20,8 @@
 #include "firebase.h"
 
 /* Define the WiFi credentials */
-#define WIFI_SSID  				"OPPO A9 2020"
-#define WIFI_PASSWORD 			"Fostinos"
+#define WIFI_SSID  				"OPPO A9 2020" //"AndroidAP69FA"//
+#define WIFI_PASSWORD 			"Fostinos" //"ayyoub02@"//
 
 /* Firebase Objects */
 FirebaseData fbdo;
@@ -65,6 +65,7 @@ int count = 0;
 unsigned long wakeUpTime = 0;
 unsigned long currentTime = 0;
 unsigned long lastTime = 0;			// used only in toggleLED function
+uint8_t channel = 1;
 
 void setup() {
 	// Save the time firstly
@@ -82,8 +83,6 @@ void setup() {
 
 	// Init ESP-NOW
 	initESP_NOW();
-
-
 
 }
 
@@ -128,30 +127,6 @@ void loop() {
 
 
 /**
- * @fn 					- getWiFiChannel
- * 
- * @brief 				- This function scans WiFi network and return its channel
- * 
- * @param[in] 			- ssid 
- * 
- * @return 				- WiFi channel 
- */
-int32_t getWiFiChannel(const char *ssid)
-{
-	if (int32_t n = WiFi.scanNetworks()) 
-	{
-		for (uint8_t i=0; i<n; i++) 
-		{
-			if (!strcmp(ssid, WiFi.SSID(i).c_str())) 
-			{
-				return WiFi.channel(i);
-			}
-		}
-	}
-	return 0;
-}
-
-/**
  * @fn 					- initWiFi
  * 
  * @brief 				- This function initializes WiFi network
@@ -161,7 +136,6 @@ int32_t getWiFiChannel(const char *ssid)
 void initWiFi(void)
 {
 	WiFi.mode(WIFI_STA);
-	uint8_t channel = (uint8_t)getWiFiChannel(WIFI_SSID);
     esp_wifi_set_promiscuous(true);
     esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
     esp_wifi_set_promiscuous(false);
@@ -190,7 +164,7 @@ void initESP_NOW(void)
 
 	// Register peer
 	esp_now_peer_info_t peerInfo;
-	peerInfo.channel = (u8_t)getWiFiChannel(WIFI_SSID);  
+	peerInfo.channel = channel;  
 	peerInfo.ifidx   = ESP_IF_WIFI_STA;
 	peerInfo.encrypt = false;
 	memcpy(peerInfo.peer_addr, addressESP_CommandReceiver, 6);
@@ -247,6 +221,8 @@ void initFirebase(void)
 		delay(50);
 	}
 	Serial.println();
+
+	WiFi.printDiag(Serial);
 
 	configFirebase();
 
