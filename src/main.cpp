@@ -23,6 +23,8 @@
 #define WIFI_SSID  				"OPPO A9 2020" //"AndroidAP69FA"//
 #define WIFI_PASSWORD 			"Fostinos" //"ayyoub02@"//
 
+#define ENABLE_SLEEP 			false
+
 
 /* HTTP Objects */
 WiFiClient wifiClient;
@@ -40,6 +42,7 @@ RTC_DATA_ATTR bool isNewCommand = false;
 RTC_DATA_ATTR  ESP_Data allData[ESP_TOTAL];
 // ESP_Command (Stored in RTC Memory)
 RTC_DATA_ATTR ESP_Command cmd;
+RTC_DATA_ATTR String RxBuffer; 
 
 // Synchronization Byte (Stored in RTC Memory)
 RTC_DATA_ATTR uint8_t sync;
@@ -59,7 +62,6 @@ uint8_t addressESP_CommandReceiver[ESP_ADDR] = {
 
 
 // Buffer and counter of Serial Incoming Data
-String RxBuffer; 
 int count = 0;	
 
 unsigned long wakeUpTime = 0;
@@ -84,14 +86,20 @@ void setup() {
 	// Init ESP-NOW
 	initESP_NOW();
 
+	//
+	Serial.print("\nActivity Time = ");
+	Serial.println(activityTime);
+
+	Serial.print("\nSleep Time = ");
+	Serial.println(sleepTime);
 }
 
 void loop() {
 	currentTime = micros();
-	if ( (currentTime - wakeUpTime) < activityTime )
+	if ( !ENABLE_SLEEP || ((currentTime - wakeUpTime) < activityTime) )
 	{
 		getUARTData();
-		if(true)
+		if(isNewData)
 		{
 			isNewData = false;
 			if(isNewCommand)
@@ -103,18 +111,21 @@ void loop() {
 			}
 			// Store All ESPData on Cloud
 			//sendDataServer();
-			//ESP.restart();
 		}
 
 	}else // (currentTime  - wakeUpTime) >= activityTime
 	{
 		// Activity Time Over
 		// Going to Sleep Mode
-		Serial.println("\nActivity Time Over");
-		Serial.println("Going to Sleep Mode");
-		currentTime = micros();
-		esp_sleep_enable_timer_wakeup(sleepTime);
-		esp_deep_sleep_start();		
+		if(ENABLE_SLEEP)
+		{
+			Serial.println("\nActivity Time Over");
+			Serial.println("Going to Sleep Mode");
+			currentTime = micros();
+			esp_sleep_enable_timer_wakeup(sleepTime);
+			esp_deep_sleep_start();		
+		}
+
 	}
 	
 
@@ -193,6 +204,13 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t sendStatus)
 		Serial.println("Delivery success");
 		// Synchronization
 		sync = SYNC_ACK;
+		if(cmd.command == CMD_ACTIVITY)
+		{
+			activityTime = cmd.time * s_TO_uS_FACTOR;
+		}else if(cmd.command == CMD_SLEEP)
+		{
+			sleepTime = cmd.time * s_TO_uS_FACTOR;
+		}
 	}
 	else{
 		Serial.println("Delivery fail");
@@ -273,8 +291,7 @@ void beginCommandSending()
 	ESP_Command cmd = getESPCommand();
 
 	// Send ESP_Command
-	(void)cmd;
-	//esp_now_send(addressESP_CommandReceiver, (uint8_t*)&cmd, sizeof(cmd));
+	esp_now_send(addressESP_CommandReceiver, (uint8_t*)&cmd, sizeof(cmd));
 
 }
 
@@ -364,22 +381,21 @@ ESP_Command getESPCommand(void)
 	Serial.print("RxBuffer = ");
 	Serial.println(RxBuffer);
 
-	Serial.print("CMD.TIME = ");
-	Serial.println(cmd.time);
-
-
 	RxBuffer.clear();
-
-	Serial.print("After clear RxBuffer = ");
-	Serial.println(RxBuffer);
 
 	// Write the new ESP_Command.time to corresponding time in RTC Memory
 	if(cmd.command == CMD_SLEEP)
 	{
-		sleepTime = cmd.time * s_TO_uS_FACTOR;
+		if(cmd.time <= 0 || cmd.time >= 3600)
+		{
+			cmd.time = SLEEP_TIME;
+		}
 	}else if (cmd.command == CMD_ACTIVITY)
 	{
-		activityTime = cmd.time * s_TO_uS_FACTOR;
+		if(cmd.time <= 0 || cmd.time >= 10)
+		{
+			cmd.time = ACTIVITY_TIME;
+		}
 	}
 	Serial.println("\nCMD ID : " + String(cmd.board_ID));
 	Serial.println("\nCMD TYPE : " + String(cmd.command));
@@ -467,8 +483,6 @@ void getUARTData(void)
 		}else if(count >= 1 && count <= 4)
 		{
 			RxBuffer += inChar;
-			Serial.println();
-			Serial.println(inChar);
 		}
 		if(inChar == '\n') {
 			isNewCommand = true;
@@ -476,8 +490,5 @@ void getUARTData(void)
 			break;
 		}
 		count++;
-		
-		Serial.print("\nCOUNT = ");
-		Serial.println(count);
 	}
 }

@@ -54,7 +54,7 @@
 #define 		ESP_ADDR				6					// ESP MAC Address size (6 Bytes)
 #define 		RESERVED				6					// Reserved Bytes for other sensors (6 Bytes)
 #define 		SLEEP_TIME				30					// Default Sleep Time (in Seconds)
-#define 		ACTIVITY_TIME			2000					// Default Activity Time before going to Sleep Mode (in Seconds)
+#define 		ACTIVITY_TIME			5					// Default Activity Time before going to Sleep Mode (in Seconds)
 #define 		s_TO_uS_FACTOR 			1000000 			// Conversion Factor for Seconds to MicroSeconds
 #define 		ms_TO_uS_FACTOR 		1000	 			// Conversion Factor for MiliSeconds to MicroSeconds
 
