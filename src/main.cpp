@@ -14,19 +14,19 @@
 #include <esp_wifi.h>
 #include <esp_now.h>
 #include <ArduinoJson.h>
+#include <HTTPClient.h>
 
 #include "main.h"
 #include "battery.h"
-#include "firebase.h"
 
 /* Define the WiFi credentials */
 #define WIFI_SSID  				"OPPO A9 2020" //"AndroidAP69FA"//
 #define WIFI_PASSWORD 			"Fostinos" //"ayyoub02@"//
 
-/* Firebase Objects */
-FirebaseData fbdo;
-FirebaseAuth auth;
-FirebaseConfig config;
+
+/* HTTP Objects */
+WiFiClient wifiClient;
+HTTPClient httpClient;
 
 // Get rom vcc voltage (equivalent to ESP.getVcc() but not working properly)
 // extern "C" int rom_phy_get_vdd33();
@@ -87,22 +87,23 @@ void setup() {
 }
 
 void loop() {
-
 	currentTime = micros();
 	if ( (currentTime - wakeUpTime) < activityTime )
 	{
-		if(isNewData)
+		getUARTData();
+		if(true)
 		{
 			isNewData = false;
 			if(isNewCommand)
 			{
 				isNewCommand = false;
+				
 				// Send ESPCommand
 				beginCommandSending();
 			}
 			// Store All ESPData on Cloud
-			storeDataOnCloud();
-			ESP.restart();
+			//sendDataServer();
+			//ESP.restart();
 		}
 
 	}else // (currentTime  - wakeUpTime) >= activityTime
@@ -170,65 +171,6 @@ void initESP_NOW(void)
 	memcpy(peerInfo.peer_addr, addressESP_CommandReceiver, 6);
 	esp_now_add_peer(&peerInfo);
 }
-
-/**
- * @fn 					- configFirebase
- * 
- * @brief 				- This function configures Firebase Objects
- * 
- * @return 				- none 
- */
-void configFirebase(void)
-{
-	/* Assign the api key (required) */
-	config.api_key = API_KEY;
-
-	/* Assign the user sign in credentials (required) */
-	auth.user.email = USER_EMAIL;
-	auth.user.password = USER_PASSWORD;
-
-	/* Assign the RTDB URL (required) */
-	config.database_url = DATABASE_URL;
-
-	/* Assign the callback function for the long running token generation task */
-	config.token_status_callback = tokenStatusCallback; //see addons/TokenHelper.h
-
-	Firebase.reconnectWiFi(true);
-	fbdo.setResponseSize(4096);
-}
-
-/**
- * @fn 					- initFirebase
- * 
- * @brief 				- This function initializes Firebase
- * 
- * @return 				- none 
- */
-void initFirebase(void)
-{
-	if(esp_now_deinit() != ESP_OK)
-	{
-		Serial.println("Error De-initialization of ESP-NOW");
-	}
-
-	initWiFi();
-
-	// Start WiFi
-	WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-	Serial.print("Connecting to Wi-Fi Station....");
-	while (WiFi.status() != WL_CONNECTED) {
-		Serial.print(".");
-		delay(50);
-	}
-	Serial.println();
-
-	WiFi.printDiag(Serial);
-
-	configFirebase();
-
-	Firebase.begin(&config, &auth);
-}
-
 
 
 /**
@@ -331,7 +273,8 @@ void beginCommandSending()
 	ESP_Command cmd = getESPCommand();
 
 	// Send ESP_Command
-	esp_now_send(addressESP_CommandReceiver, (uint8_t*)&cmd, sizeof(cmd));
+	(void)cmd;
+	//esp_now_send(addressESP_CommandReceiver, (uint8_t*)&cmd, sizeof(cmd));
 
 }
 
@@ -415,26 +358,65 @@ ESP_Data getESPData(void)
  */
 ESP_Command getESPCommand(void)
 {
-	ESP_Command cmd;
-	cmd.board_ID = BOARD_ID;
-	cmd.command = CMD_ACTIVITY;
-	cmd.time = 8;
+
+	cmd.time = (uint32_t)RxBuffer.toInt();
+
+	Serial.print("RxBuffer = ");
+	Serial.println(RxBuffer);
+
+	Serial.print("CMD.TIME = ");
+	Serial.println(cmd.time);
+
+
+	RxBuffer.clear();
+
+	Serial.print("After clear RxBuffer = ");
+	Serial.println(RxBuffer);
+
+	// Write the new ESP_Command.time to corresponding time in RTC Memory
+	if(cmd.command == CMD_SLEEP)
+	{
+		sleepTime = cmd.time * s_TO_uS_FACTOR;
+	}else if (cmd.command == CMD_ACTIVITY)
+	{
+		activityTime = cmd.time * s_TO_uS_FACTOR;
+	}
+	Serial.println("\nCMD ID : " + String(cmd.board_ID));
+	Serial.println("\nCMD TYPE : " + String(cmd.command));
+	Serial.println("\nCMD TIME : " + String(cmd.time));
+
 	return cmd;
 }
 
 
 /**
- * @fn					- storeDataOnCloud
+ * @fn					- sendDataServer
  * 
- * @brief 				- This function store All ESPData on Cloud
+ * @brief 				- This function sends All ESPData to the server
  * 
  * @return				- none
  * 
  */
-void storeDataOnCloud(void)
+void sendDataServer(void)
 {
-	initFirebase();
-	delay(250);
+	if(esp_now_deinit() != ESP_OK)
+	{
+		Serial.println("Error De-initialization of ESP-NOW");
+	}
+
+	initWiFi();
+
+	// Start WiFi
+	WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+	Serial.print("Connecting to Wi-Fi Station....");
+	while (WiFi.status() != WL_CONNECTED) {
+		Serial.print(".");
+		delay(50);
+	}
+	Serial.println();
+
+	WiFi.printDiag(Serial);
+
 	DynamicJsonDocument doc(2048);
 	for(int i=0; i<ESP_TOTAL; i++)
 	{
@@ -447,75 +429,55 @@ void storeDataOnCloud(void)
 	}
 	String stringJson;
 	serializeJson(doc, stringJson);
-	FirebaseJson fbJson;
-	fbJson.setJsonData(stringJson);
-	String path = "/AllData";
-	Serial.println("Firebase Token...");
-	while(!Firebase.ready())
+
+	httpClient.begin("https://espserver101.herokuapp.com/postdata");
+	httpClient.addHeader("Content-Type", "application/json");
+	int httpResponseCode = httpClient.POST(stringJson);
+	if(httpResponseCode > 0)
 	{
-		Serial.print(".");
-	}
-	if ( Firebase.pushJSON(fbdo, path, fbJson) )
+		String payload = httpClient.getString();
+		Serial.println(payload);
+	}else
 	{
-		Serial.println("------------------------------------");
-		Serial.println("PASSED PUSHSTRING");
-		Serial.println("PATH: " + fbdo.dataPath());
-		Serial.println("PUSH NAME: " + fbdo.pushName());
-		Serial.println("ETag: " + fbdo.ETag());
-		Serial.println("------------------------------------");
-		Serial.println();
-	}
-	else
-	{
-		Serial.println("------------------------------------");
-		Serial.println("FAILED PUSHSTRING");
-		Serial.println("REASON: " + fbdo.errorReason());
-		Serial.println("------------------------------------");
-		Serial.println();
+		Serial.println("Error on HTTP response");
 	}
 }
 
-// 	while (Serial.available()) {
-// 	char inChar = (char)Serial.read();
-// 	if(count == 0)
-// 	{
-// 		if(inChar == 'A')
-// 		{
-// 			cmd.command = CMD_ACTIVITY;
-// 		}else if(inChar == 'S')
-// 		{
-// 			cmd.command = CMD_SLEEP;
-// 		}
-// 	}else if(count >= 1 && count <= 4)
-// 	{
-// 		RxBuffer += inChar;
-// 	}
-// 	if(inChar == '\n') {
-// 		isNewCommand = true;
-// 		count = 0;
-// 		break;
-// 		}
-// 		count++;
-// 	}
-	
-// 	if(isNewCommand)
-// 	{
-// 		cmd.time = (uint32_t)RxBuffer.toInt();
-
-// 		// Write the new ESP_Command.time to corresponding time in RTC Memory
-// 		if(cmd.command == CMD_SLEEP)
-// 		{
-// 			sleepTime = cmd.time * s_TO_uS_FACTOR;
-// 		}else if (cmd.command == CMD_ACTIVITY)
-// 		{
-// 			activityTime = cmd.time * s_TO_uS_FACTOR;
-// 		}
-// 		Serial.println("\nCMD ID : " + String(cmd.board_ID));
-// 		Serial.println("\nCMD TYPE : " + String(cmd.command));
-// 		Serial.println("\nCMD TIME : " + String(cmd.time));
-// 		RxBuffer.clear();
-// 		// Send the new ESP_Command
-// 		beginCommandSending();
-// 		isNewCommand = false;
-// 	}
-	
+/**
+ * @fn					- getUARTData
+ * 
+ * @brief 				- This function receives UART Data
+ * 
+ * @return				- none
+ * 
+ */
+void getUARTData(void)
+{
+	while (Serial.available()) {
+		char inChar = (char)Serial.read();
+		if(count == 0)
+		{
+			if(inChar == 'A')
+			{
+				cmd.command = CMD_ACTIVITY;
+			}else if(inChar == 'S')
+			{
+				cmd.command = CMD_SLEEP;
+			}
+		}else if(count >= 1 && count <= 4)
+		{
+			RxBuffer += inChar;
+			Serial.println();
+			Serial.println(inChar);
+		}
+		if(inChar == '\n') {
+			isNewCommand = true;
+			count = 0;
+			break;
+		}
+		count++;
+		
+		Serial.print("\nCOUNT = ");
+		Serial.println(count);
+	}
+}

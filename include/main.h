@@ -131,26 +131,6 @@ void initWiFi(void);
 void initESP_NOW(void);
 
 
-/**
- * @fn 					- configFirebase
- * 
- * @brief 				- This function configures Firebase Objects
- * 
- * @return 				- none 
- */
-void configFirebase(void);
-
-
-/**
- * @fn 					- initFirebase
- * 
- * @brief 				- This function initializes Firebase
- * 
- * @return 				- none 
- */
-void initFirebase(void);
-
-
 
 /**
  * @fn					- OnDataSent 
@@ -257,15 +237,25 @@ ESP_Command getESPCommand(void);
 void toggleLED(unsigned long currentTime);
 
 
+
 /**
- * @fn					- storeDataOnCloud
+ * @fn					- sendDataServer
  * 
- * @brief 				- This function store All ESPData on Cloud
+ * @brief 				- This function sends All ESPData to the server
  * 
  * @return				- none
  * 
  */
-void storeDataOnCloud(void);
+void sendDataServer(void);
 
+/**
+ * @fn					- getUARTData
+ * 
+ * @brief 				- This function receives UART Data
+ * 
+ * @return				- none
+ * 
+ */
+void getUARTData(void);
 
 #endif /* __MAIN_H */
