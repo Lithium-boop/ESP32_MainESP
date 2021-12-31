@@ -110,8 +110,9 @@ void loop() {
 				beginCommandSending();
 			}
 			// Store All ESPData on Cloud
-			//sendDataServer();
-		}
+			sendDataServer();
+      ESP.restart();
+    }
 
 	}else // (currentTime  - wakeUpTime) >= activityTime
 	{
